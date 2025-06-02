@@ -1,0 +1,148 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String?  @map("password_hash")
+  emailVerified Boolean  @default(false) @map("email_verified")
+  oauthProvider String?  @map("oauth_provider")
+  oauthId       String?  @map("oauth_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  lastLogin     DateTime? @map("last_login")
+  
+  // Relations
+  profile      UserProfile?
+  authTokens   AuthToken[]
+  tarotReadings TarotReading[]
+  journalEntries JournalEntry[]
+  
+  @@map("users")
+}
+
+model UserProfile {
+  id               String   @id @default(cuid())
+  userId           String   @unique @map("user_id")
+  name             String?
+  subscriptionTier String   @default("free") @map("subscription_tier")
+  preferences      Json     @default("{}")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("user_profiles")
+}
+
+model AuthToken {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  tokenType String   @map("token_type") // verification, password_reset, refresh
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("auth_tokens")
+}
+
+model TarotCard {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  arcana      String   // major, minor
+  suit        String?  // cups, wands, swords, pentacles (null for major arcana)
+  number      Int?     // card number (null for court cards and major arcana)
+  keywords    String[] // positive keywords
+  description String
+  imageUrl    String?  @map("image_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  readingCards ReadingCard[]
+  
+  @@map("tarot_cards")
+}
+
+model TarotReading {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  spreadType  String   @map("spread_type") // single, three_card, celtic_cross
+  question    String?
+  interpretation String?
+  sentiment   String?  // positive, neutral, negative
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user         User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cards        ReadingCard[]
+  journalEntry JournalEntry?
+  
+  @@map("tarot_readings")
+}
+
+model ReadingCard {
+  id           String   @id @default(cuid())
+  readingId    String   @map("reading_id")
+  cardId       String   @map("card_id")
+  position     String   // past, present, future, etc.
+  isReversed   Boolean  @default(false) @map("is_reversed")
+  interpretation String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  reading TarotReading @relation(fields: [readingId], references: [id], onDelete: Cascade)
+  card    TarotCard @relation(fields: [cardId], references: [id])
+  
+  @@map("reading_cards")
+}
+
+model JournalEntry {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  readingId   String?  @unique @map("reading_id")
+  title       String?
+  content     String
+  mood        String?  // happy, sad, anxious, calm, etc.
+  tags        String[] @default([])
+  isPrivate   Boolean  @default(true) @map("is_private")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user    User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reading TarotReading? @relation(fields: [readingId], references: [id])
+  
+  @@map("journal_entries")
+}
+
+model Subscription {
+  id              String   @id @default(cuid())
+  userId          String   @unique @map("user_id")
+  stripeCustomerId String? @unique @map("stripe_customer_id")
+  stripeSubscriptionId String? @unique @map("stripe_subscription_id")
+  tier            String   @default("free") // free, premium, premium_plus
+  status          String   @default("active") // active, canceled, past_due
+  currentPeriodStart DateTime? @map("current_period_start")
+  currentPeriodEnd   DateTime? @map("current_period_end")
+  cancelAtPeriodEnd  Boolean @default(false) @map("cancel_at_period_end")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  @@map("subscriptions")
+}
